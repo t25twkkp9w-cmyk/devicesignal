@@ -1,0 +1,32 @@
+[
+  {
+    "source_id": "MAN-DEMO-P1-V1-BAT",
+    "document_id": "MAN-DEMO-P1",
+    "version": "1.0",
+    "model": "Demo-P1",
+    "section": "2.1 BAT-LOW",
+    "location": "section 2.1",
+    "source_type": "manual",
+    "text": "FICTIONAL DEMO SPECIFICATION: BAT-LOW indicates low reported battery charge. The alarm and a low charge reading alone do not establish the reason for a stop, battery health, or a defective battery. Review event timing, external power state and any recorded stop reason before attributing the event."
+  },
+  {
+    "source_id": "MAN-DEMO-P1-V1-MOTOR",
+    "document_id": "MAN-DEMO-P1",
+    "version": "1.0",
+    "model": "Demo-P1",
+    "section": "2.2 MOTOR FAULT",
+    "location": "section 2.2",
+    "source_type": "manual",
+    "text": "FICTIONAL DEMO SPECIFICATION: MOTOR FAULT indicates that the controller detected a drive-system fault. When a stop reason records MOTOR FAULT, it supports that detected condition as the immediate reason for the stop. The alarm does not identify the failed component or establish the underlying root cause. Preserve diagnostic logs for engineering review."
+  },
+  {
+    "source_id": "SOP-DEMO-INV-V1-MISSING",
+    "document_id": "SOP-DEMO-INV",
+    "version": "1.0",
+    "model": "Demo-P1",
+    "section": "3 Missing evidence",
+    "location": "section 3",
+    "source_type": "procedure",
+    "text": "FICTIONAL DEMO PROCEDURE: An unavailable event log does not mean no event occurred or no log was created. When event time, readings or logs are missing, record the cause as undetermined, list the needed records and request evidence through a reviewer. Preserve any potential safety concern for prompt human review."
+  }
+]

@@ -1,0 +1,62 @@
+[
+  {
+    "case_id": "DEMO-001",
+    "expected_cause_status": "unconfirmed",
+    "must_include": [
+      "The reporter says the pump stopped and was restarted.",
+      "The event record shows 4% charge and BAT-LOW at 14:04, before the reported 14:05 stop."
+    ],
+    "must_not_claim": [
+      "A defective battery has been confirmed",
+      "The device is safe to return to use",
+      "A regulatory decision has been finalized"
+    ],
+    "required_evidence_ids": [
+      "DEMO-001-COMPLAINT",
+      "DEMO-001-LOG-01",
+      "MAN-DEMO-P1-V1-BAT"
+    ],
+    "human_review_required": true,
+    "extra_check": "Distinguish low charge from a defective battery."
+  },
+  {
+    "case_id": "DEMO-002",
+    "expected_cause_status": "unconfirmed",
+    "must_include": [
+      "The reporter suspects the battery and describes a motor-fault display.",
+      "At the recorded stop, charge was 80% and shutdown_reason was MOTOR_FAULT."
+    ],
+    "must_not_claim": [
+      "A defective battery has been confirmed",
+      "The device is safe to return to use",
+      "A regulatory decision has been finalized"
+    ],
+    "required_evidence_ids": [
+      "DEMO-002-COMPLAINT",
+      "DEMO-002-LOG-01",
+      "MAN-DEMO-P1-V1-MOTOR"
+    ],
+    "human_review_required": true,
+    "extra_check": "Explain that 80% charge does not establish battery health and motor-fault cause remains unresolved."
+  },
+  {
+    "case_id": "DEMO-003",
+    "expected_cause_status": "undetermined",
+    "must_include": [
+      "The reporter describes an unexpected stop but is unsure of the time and alarm.",
+      "No logs or readings are available for this review."
+    ],
+    "must_not_claim": [
+      "A defective battery has been confirmed",
+      "The device is safe to return to use",
+      "A regulatory decision has been finalized"
+    ],
+    "required_evidence_ids": [
+      "DEMO-003-COMPLAINT",
+      "DEMO-003-LOOKUP-01",
+      "SOP-DEMO-INV-V1-MISSING"
+    ],
+    "human_review_required": true,
+    "extra_check": "Unavailable logs must not be described as proof that no event was logged."
+  }
+]

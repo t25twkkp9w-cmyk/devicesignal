@@ -1,0 +1,140 @@
+[
+  {
+    "case_id": "DEMO-001",
+    "synthetic": true,
+    "complaint": "During treatment, pump P-101, model Demo-P1, beeped and stopped. The nurse restarted it. I think the battery was faulty. Please investigate why it stopped.",
+    "device": {
+      "device_id": "P-101",
+      "model": "Demo-P1"
+    },
+    "incident": {
+      "device_id": "P-101",
+      "model": "Demo-P1",
+      "event_date": "2026-11-03",
+      "event_time": "14:05:00-06:00",
+      "log_availability": "available",
+      "battery_percent": 4,
+      "alarm_code": "BAT-LOW",
+      "shutdown_reason": null,
+      "service_history_availability": "not_provided"
+    },
+    "evidence": [
+      {
+        "evidence_id": "DEMO-001-COMPLAINT",
+        "kind": "complaint",
+        "label": "Original complaint",
+        "location": "intake narrative",
+        "text": "During treatment, pump P-101, model Demo-P1, beeped and stopped. The nurse restarted it. I think the battery was faulty. Please investigate why it stopped.",
+        "timestamp": null
+      },
+      {
+        "evidence_id": "DEMO-001-LOG-01",
+        "kind": "incident_log",
+        "label": "Device event log",
+        "location": "P-101 event row 1",
+        "text": "Battery 4%; BAT-LOW recorded one minute before reported stop. Stop reason not supplied.",
+        "timestamp": "2026-11-03T14:04:00-06:00"
+      },
+      {
+        "evidence_id": "MAN-DEMO-P1-V1-BAT",
+        "kind": "reference",
+        "label": "MAN-DEMO-P1 v1.0",
+        "location": "section 2.1",
+        "text": "FICTIONAL DEMO SPECIFICATION: BAT-LOW indicates low reported battery charge. The alarm and a low charge reading alone do not establish the reason for a stop, battery health, or a defective battery. Review event timing, external power state and any recorded stop reason before attributing the event.",
+        "timestamp": null
+      }
+    ]
+  },
+  {
+    "case_id": "DEMO-002",
+    "synthetic": true,
+    "complaint": "During treatment, pump P-102, model Demo-P1, beeped, displayed MOTOR FAULT, and stopped. The nurse restarted it, and treatment resumed. I think the battery is faulty. Please investigate why it stopped.",
+    "device": {
+      "device_id": "P-102",
+      "model": "Demo-P1"
+    },
+    "incident": {
+      "device_id": "P-102",
+      "model": "Demo-P1",
+      "event_date": "2026-11-03",
+      "event_time": "15:10:00-06:00",
+      "log_availability": "available",
+      "battery_percent": 80,
+      "alarm_code": "MOTOR_FAULT",
+      "shutdown_reason": "MOTOR_FAULT",
+      "service_history_availability": "not_provided"
+    },
+    "evidence": [
+      {
+        "evidence_id": "DEMO-002-COMPLAINT",
+        "kind": "complaint",
+        "label": "Original complaint",
+        "location": "intake narrative",
+        "text": "During treatment, pump P-102, model Demo-P1, beeped, displayed MOTOR FAULT, and stopped. The nurse restarted it, and treatment resumed. I think the battery is faulty. Please investigate why it stopped.",
+        "timestamp": null
+      },
+      {
+        "evidence_id": "DEMO-002-LOG-01",
+        "kind": "incident_log",
+        "label": "Device event log",
+        "location": "P-102 event row 1",
+        "text": "Battery 80%; MOTOR_FAULT recorded as shutdown reason.",
+        "timestamp": "2026-11-03T15:10:00-06:00"
+      },
+      {
+        "evidence_id": "MAN-DEMO-P1-V1-MOTOR",
+        "kind": "reference",
+        "label": "MAN-DEMO-P1 v1.0",
+        "location": "section 2.2",
+        "text": "FICTIONAL DEMO SPECIFICATION: MOTOR FAULT indicates that the controller detected a drive-system fault. When a stop reason records MOTOR FAULT, it supports that detected condition as the immediate reason for the stop. The alarm does not identify the failed component or establish the underlying root cause. Preserve diagnostic logs for engineering review.",
+        "timestamp": null
+      }
+    ]
+  },
+  {
+    "case_id": "DEMO-003",
+    "synthetic": true,
+    "complaint": "Pump P-103, model Demo-P1, stopped unexpectedly during treatment. I do not remember whether an alarm appeared. I do not have the battery reading or event logs, and I am unsure of the exact time. Please investigate why it stopped.",
+    "device": {
+      "device_id": "P-103",
+      "model": "Demo-P1"
+    },
+    "incident": {
+      "device_id": "P-103",
+      "model": "Demo-P1",
+      "event_date": "2026-11-03",
+      "event_time": null,
+      "log_availability": "unavailable",
+      "battery_percent": null,
+      "alarm_code": null,
+      "shutdown_reason": null,
+      "service_history_availability": "not_provided"
+    },
+    "evidence": [
+      {
+        "evidence_id": "DEMO-003-COMPLAINT",
+        "kind": "complaint",
+        "label": "Original complaint",
+        "location": "intake narrative",
+        "text": "Pump P-103, model Demo-P1, stopped unexpectedly during treatment. I do not remember whether an alarm appeared. I do not have the battery reading or event logs, and I am unsure of the exact time. Please investigate why it stopped.",
+        "timestamp": null
+      },
+      {
+        "evidence_id": "DEMO-003-LOOKUP-01",
+        "kind": "lookup_result",
+        "label": "Incident lookup result",
+        "location": "case evidence query",
+        "text": "No event logs or battery readings are available to this investigation.",
+        "timestamp": null
+      },
+      {
+        "evidence_id": "SOP-DEMO-INV-V1-MISSING",
+        "kind": "reference",
+        "label": "SOP-DEMO-INV v1.0",
+        "location": "section 3",
+        "text": "FICTIONAL DEMO PROCEDURE: An unavailable event log does not mean no event occurred or no log was created. When event time, readings or logs are missing, record the cause as undetermined, list the needed records and request evidence through a reviewer. Preserve any potential safety concern for prompt human review.",
+        "timestamp": null
+      }
+    ]
+  }
+]
