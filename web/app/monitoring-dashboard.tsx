@@ -5,7 +5,7 @@ export type MonitoringStats = {
   complaints: { total: number; by_status: Record<string, number>; by_scenario: Count[]; quality_flags: number; handoffs: number; simulated_receipts: number };
   history: { total: number; with_reference: number; by_scenario: (Count & { with_reference: number })[] };
   investigations: { total: number; failed: number; median_latency_ms: number | null; openai_reranks: number };
-  evals: { offline_suites: number; latest_offline: (Score & { at: string; case_count: number }) | null; online_actions: number; online_checks: Score };
+  evals: { golden_revision: number; offline_suites: number; latest_offline: (Score & { at: string; case_count: number; golden_revision?: number }) | null; online_actions: number; online_checks: Score };
 };
 
 function Metric({ title, value, detail }: { title: string; value: string | number; detail: string }) {
@@ -55,7 +55,8 @@ export default function MonitoringDashboard({ stats }: { stats: MonitoringStats 
     <section className="panel"><h2>Evaluation health</h2>
       <div className="monitor-metrics">
         <Metric title="Offline checks passed" value={latest ? `${latest.passed} / ${latest.checks}` : '—'}
-          detail={latest ? `Latest local suite · ${latest.case_count} cases · ${new Date(latest.at).toLocaleString()}` : 'Run the offline suite in Evaluation Lab'} />
+          detail={latest ? `Latest local suite · Golden revision ${latest.golden_revision ?? "unrecorded"} · ${latest.case_count} cases · ${new Date(latest.at).toLocaleString()}` : 'Run the offline suite in Evaluation Lab'} />
+        <Metric title="Golden dataset revision" value={evals.golden_revision} detail="Approved reviewer updates" />
         <Metric title="Offline suites run" value={evals.offline_suites} detail="Completed local replays" />
         <Metric title="Online checks passed" value={evals.online_checks.checks ? `${evals.online_checks.passed} / ${evals.online_checks.checks}` : '—'}
           detail="Checks on saved reviewer actions" />

@@ -23,8 +23,14 @@ type Disposition = { decision: string; reviewer: string; rationale: string; at: 
 type Report = { historical_context?: HistoricalCase[]; id: string; status: string; narrative: string; citations: string[]; receipt?: { reviewer: string; reference: string; at: string } };
 type Case = { historical_cases?: HistoricalCase[] | null; retrieval?: RetrievalRanking | null; disposition?: Disposition | null; report?: Report | null; reporting_history?: { decision?: Disposition; receipt?: Report['receipt'] }[]; id: string; scenario: string; title: string; complaint: string; status: string; version: number; device: Scenario['device']; incident: Incident; urgent: boolean; draft: Draft | null; evidence?: Evidence[]; sources?: Source[]; added_evidence: Evidence[]; updated_at: string; error?: string; review_history: Review[] };
 type Run = { id: string; case_id: string; created_at: string; status: string; duration_ms: number; tokens: number | null; trace_url: string | null; mode?: string; rerank_mode?: string; history_ids?: string[]; historical_report_refs?: string[]; online_eval_count?: number };
-type Evaluation = { experiment: string | null; results: { actual: Draft; expected: { case_id: string; expected_cause_status: string; must_include: string[]; must_not_claim: string[]; extra_check: string }; checks: { key: string; score: number }[] }[] };
-type OnlineEval = { id: string; case_id: string; run_id: string | null; event: string; at: string; checks: { key: string; score: number }[] };
+type Evaluation = { experiment: string | null; golden_revision: number; results: { actual: Draft; expected: { case_id: string; expected_cause_status: string; expected_top_followup: string; must_include: string[]; must_not_claim: string[]; extra_check: string }; checks: { key: string; score: number }[] }[] };
+type FeedbackCandidate = { scenario: string; selected: NonNullable<Review['selected_followup']>; original_top: string; reviewer: string; review_rationale: string; matches_golden_input: boolean };
+type GoldenDataset = {
+  revision: number;
+  cases: { scenario: string; expected_top_followup: string }[];
+  history: { revision: number; online_eval_id: string; scenario: string; reviewer: string; rationale: string; previous_top_followup: string; expected_top_followup: string }[];
+};
+type OnlineEval = { id: string; case_id: string; run_id: string | null; event: string; at: string; feedback_candidate?: FeedbackCandidate; checks: { key: string; score: number }[] };
 type Health = { model: string | null; tracing: boolean; langsmith_configured: boolean };
 
 const nav = [
@@ -76,6 +82,7 @@ export default function Home() {
   const [sources, setSources] = useState<Source[]>([]);
   const [corpus, setCorpus] = useState<'reference' | 'history'>('reference');
   const [onlineEvals, setOnlineEvals] = useState<OnlineEval[]>([]);
+  const [golden, setGolden] = useState<GoldenDataset>();
   const [ranking, setRanking] = useState<RetrievalRanking | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [monitorStats, setMonitorStats] = useState<MonitoringStats | null>(null);
@@ -113,6 +120,12 @@ export default function Home() {
     setComplaint(scenario.complaint);
   }
 
+  async function refreshEvalContext() {
+    const [online, dataset] = await Promise.all([api<OnlineEval[]>('/evals/online'), api<GoldenDataset>('/evals/golden')]);
+    setOnlineEvals(online);
+    setGolden(dataset);
+  }
+
   function open(screen: Screen) {
     setError('');
     setNotice('');
@@ -123,7 +136,7 @@ export default function Home() {
       setRanking(null);
       setSources(await api<Source[]>('/rag'));
     });
-    if (screen === 'evals') void task('Loading online evals', async () => setOnlineEvals(await api<OnlineEval[]>('/evals/online')));
+    if (screen === 'evals') void task('Loading Evaluation Lab', refreshEvalContext);
     if (screen === 'monitor') void task('Loading monitoring dashboard', async () => {
       const [dashboard, recentRuns] = await Promise.all([api<MonitoringStats>('/monitoring/dashboard'), api<Run[]>('/monitoring')]);
       setMonitorStats(dashboard);
@@ -404,23 +417,63 @@ export default function Home() {
         </Panel>
           {sources.map(source => <Panel key={source.source_id} title={source.section}><span className="mono">{source.document_id} · v{source.version}</span>{source.score !== undefined && <span className="badge">Cosine {source.score.toFixed(3)}</span>}<p>{source.text}</p>{source.compliance && <p><strong>Historical compliance</strong> · {source.compliance.disposition}{source.compliance.reference && <> · <span className="mono">{source.compliance.reference}</span> · {source.compliance.item}</>}</p>}<small className="muted">{source.source_id}</small></Panel>)}</>}
 
-        {screen === 'evals' && <><Panel title="Offline evals"><p>Replay three golden cases to check cause status, retrieval, historical matches and filing references, citation isolation, and review routing. The claim-support rubric is available for human inspection.</p><div className="actions">
+        {screen === 'evals' && <><Panel title="Golden recommendations">
+          <p>Record a recommended follow-up in Human review on an unedited demo complaint, then approve the new target below. Each approval creates a revision for the next offline replay.</p>
+          {golden && <><span className="badge">Revision {golden.revision}</span>
+            <ul>{golden.cases.map(row => <li key={row.scenario}><strong>{row.scenario}</strong> · {row.expected_top_followup}</li>)}</ul>
+            {!!golden.history.length && <details><summary>Review promotion history</summary>{golden.history.map(row => <div className="record" key={row.revision}>
+              <strong>Revision {row.revision} · {row.scenario} · {row.reviewer}</strong>
+              <p>{row.previous_top_followup} → {row.expected_top_followup}</p><p>{row.rationale}</p>
+            </div>)}</details>}
+          </>}
+        </Panel><Panel title="Offline evals"><p>Replay three golden cases to check the top follow-up, cause status, retrieval, historical matches and filing references, citation isolation, and review routing. The claim-support rubric is available for human inspection.</p><div className="actions">
           <button className="primary" disabled={!!busy} onClick={() => void task('Running local evaluations', async () => { const result = await api<Evaluation>('/evals', {}); setPrevious(evaluation); setEvaluation(result); })}><FlaskConical size={16} /> Run local suite</button>
           <button disabled={!!busy || !health?.langsmith_configured} onClick={() => void task('Publishing LangSmith experiment', async () => { const result = await api<Evaluation>('/evals?publish=true', {}); setPrevious(evaluation); setEvaluation(result); })}>Run LangSmith experiment</button></div>
           {!health?.langsmith_configured && <p className="muted">Set LANGSMITH_API_KEY in the backend to enable experiments.</p>}
+          {evaluation && <p className="muted">Last replay · Golden revision {evaluation.golden_revision}{golden && golden.revision !== evaluation.golden_revision && " · Run the suite again to check the current revision"}</p>}
           {evaluation?.experiment && <p>LangSmith experiment · {evaluation.experiment}</p>}
-          {previous && <p className="muted">Previous suite · {previous.results.flatMap(item => item.checks).filter(check => check.score === 1).length} fully passed checks</p>}
+          {previous && <p className="muted">Previous suite · Golden revision {previous.golden_revision} · {previous.results.flatMap(item => item.checks).filter(check => check.score === 1).length} fully passed checks</p>}
         </Panel>
-          {evaluation?.results.map(row => <Panel key={row.expected.case_id} title={row.expected.case_id}><p>Expected cause status <strong>{row.expected.expected_cause_status}</strong> · Actual <strong>{row.actual.cause_status}</strong></p><p>{row.actual.interpretation}</p><div className="checks">{row.checks.map(check => <span className="badge" key={check.key}>{check.key.replaceAll('_', ' ')} · {Math.round(check.score * 100)}%</span>)}</div><details><summary>Read claim-support rubric</summary><p>{row.expected.extra_check}</p><ul>{row.expected.must_include.map(claim => <li key={claim}>{claim}</li>)}</ul><p>Unsupported claims to watch for</p><ul>{row.expected.must_not_claim.map(claim => <li key={claim}>{claim}</li>)}</ul></details></Panel>)}
+          {evaluation?.results.map(row => <Panel key={row.expected.case_id} title={row.expected.case_id}><p>Expected cause status <strong>{row.expected.expected_cause_status}</strong> · Actual <strong>{row.actual.cause_status}</strong></p><p>{row.actual.interpretation}</p><p>Expected first follow-up <strong>{row.expected.expected_top_followup}</strong> · Actual <strong>{row.actual.followups[0] ?? "None"}</strong></p><div className="checks">{row.checks.map(check => <span className="badge" key={check.key}>{check.key.replaceAll('_', ' ')} · {Math.round(check.score * 100)}%</span>)}</div><details><summary>Read claim-support rubric</summary><p>{row.expected.extra_check}</p><ul>{row.expected.must_include.map(claim => <li key={claim}>{claim}</li>)}</ul><p>Unsupported claims to watch for</p><ul>{row.expected.must_not_claim.map(claim => <li key={claim}>{claim}</li>)}</ul></details></Panel>)}
           <Panel title="Online evals">
             <p>Automatically scored when a reviewer saves a review, disposition, or simulated receipt. These deterministic checks cover saved actions and evidence links.</p>
-            <button disabled={!!busy} onClick={() => void task('Refreshing online evals', async () => setOnlineEvals(await api<OnlineEval[]>('/evals/online')))}>Refresh online results</button>
+            <button disabled={!!busy} onClick={() => void task('Refreshing Evaluation Lab', refreshEvalContext)}>Refresh online results</button>
             {!onlineEvals.length && <p className="empty">No reviewer actions scored yet.</p>}
-            {onlineEvals.map(item => <div className="record" key={item.id}>
+            {onlineEvals.map(item => {
+              const candidate = item.feedback_candidate;
+              const promotion = golden?.history.find(row => row.online_eval_id === item.id);
+              const expected = golden?.cases.find(row => row.scenario === candidate?.scenario);
+              return <div className="record" key={item.id}>
               <strong>{item.case_id} · {item.event.replaceAll('_', ' ')}</strong>
               <small>{new Date(item.at).toLocaleString()}{item.run_id && <> · Run {item.run_id}</>}</small>
               <div className="checks">{item.checks.map(check => <span className={'badge ' + (check.score ? 'reviewed' : 'failed')} key={check.key}>{check.key.replaceAll('_',' ')} · {check.score ? 'Pass' : 'Fail'}</span>)}</div>
-            </div>)}
+              {candidate && <div className="golden-candidate">
+                <p><strong>Reviewer chose #{candidate.selected.rank}</strong> · {candidate.selected.request}<br />
+                  <strong>Original first follow-up</strong> · {candidate.original_top}</p>
+                <p className="muted">{candidate.reviewer} · {candidate.review_rationale}</p>
+                {promotion ? <span className="badge reviewed">Promoted in revision {promotion.revision}</span>
+                  : !candidate.matches_golden_input ? <p className="muted">This review used a different complaint or additional evidence. Golden targets use the original demo inputs.</p>
+                  : expected?.expected_top_followup === candidate.selected.request ? <span className="badge">Matches current golden target</span>
+                  : golden && expected && <details><summary>Review for golden dataset</summary>
+                    <p>Current target · {expected.expected_top_followup}</p>
+                    <form key={golden.revision} onSubmit={event => {
+                      event.preventDefault();
+                      const data = new FormData(event.currentTarget);
+                      void task('Promoting golden recommendation', async () => {
+                        await api('/evals/online/' + item.id + '/promote', {
+                          expected_revision: golden.revision, reviewer: data.get('reviewer'), rationale: data.get('rationale'),
+                        });
+                        await refreshEvalContext();
+                        setNotice('Golden recommendation updated. Run the offline suite to check the new target.');
+                      });
+                    }}>
+                      <label>Approver<input name="reviewer" maxLength={160} required /></label>
+                      <label>Why should this follow-up rank first?<textarea name="rationale" maxLength={4000} required /></label>
+                      <button className="primary" disabled={!!busy}>Approve golden recommendation</button>
+                    </form>
+                  </details>}
+              </div>}
+            </div>; })}
           </Panel></>}
 
         {screen === 'monitor' && <>

@@ -21,7 +21,8 @@
     "expected_history_ids": [
       "HIST-P1-001"
     ],
-    "expected_history_report_refs": []
+    "expected_history_report_refs": [],
+    "expected_top_followup": "Obtain the recorded stop reason"
   },
   {
     "case_id": "DEMO-002",
@@ -48,7 +49,8 @@
     ],
     "expected_history_report_refs": [
       "SIM-HIST-2026-014"
-    ]
+    ],
+    "expected_top_followup": "Preserve the diagnostic log"
   },
   {
     "case_id": "DEMO-003",
@@ -72,6 +74,7 @@
     "expected_history_ids": [
       "HIST-P1-003"
     ],
-    "expected_history_report_refs": []
+    "expected_history_report_refs": [],
+    "expected_top_followup": "Confirm the event time and timezone"
   }
 ]

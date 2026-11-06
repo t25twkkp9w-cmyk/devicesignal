@@ -16,7 +16,7 @@ from langgraph.types import Command
 from langsmith import get_current_run_tree, traceable
 from pydantic import BaseModel, Field, StringConstraints
 
-from .evaluation import evaluate_local, publish_experiment
+from .evaluation import evaluate_local, golden_snapshot, publish_experiment
 from .online_evaluation import evaluate_action
 from .monitoring import build_dashboard, summarize_checks
 from .workflow import FIXTURES, HISTORY, HISTORY_REFERENCES, REFERENCES, build_graph, configured_reranker, rank_references, search
@@ -51,6 +51,9 @@ with db() as connection:
     )""")
     connection.execute("CREATE INDEX IF NOT EXISTS online_evals_run ON online_evals(run_id)")
     connection.execute("CREATE TABLE IF NOT EXISTS offline_eval_suites (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
+    connection.execute("""CREATE TABLE IF NOT EXISTS golden_feedback (
+        revision INTEGER PRIMARY KEY, online_eval_id TEXT UNIQUE NOT NULL, body TEXT NOT NULL
+    )""")
 
 
 def now():
@@ -83,6 +86,17 @@ def evaluate_saved_action(conn, case, event, entry):
     row = {"id": str(uuid4()), "case_id": case["id"], "case_version": case["version"],
            "run_id": case.get("run_id"), "event": event, "at": entry["at"],
            "checks": evaluate_action(case, event, entry)}
+    if event == "use_followup":
+        draft = case["draft"]
+        row["feedback_candidate"] = {
+            "scenario": case["scenario"], "selected": entry["selected_followup"],
+            "original_top": draft["followups"][0], "reviewer": entry["reviewer"],
+            "review_rationale": entry["rationale"],
+            "matches_golden_input": (
+                case["complaint"] == FIXTURES[case["scenario"]]["complaint"]
+                and not case["added_evidence"]
+            ),
+        }
     conn.execute("INSERT INTO online_evals VALUES (?, ?, ?)",
                  (row["id"], row["run_id"], json.dumps(row)))
     return case
@@ -93,6 +107,12 @@ class Intake(BaseModel):
     complaint: Narrative
     channel: Literal["Call center", "Email", "Field service", "Distributor"] = "Field service"
     urgent: bool = False
+
+
+class GoldenPromotion(BaseModel):
+    expected_revision: Annotated[int, Field(ge=0)]
+    reviewer: Short
+    rationale: Narrative
 
 
 class ReferenceQuery(BaseModel):
@@ -328,6 +348,55 @@ def online_evals():
         return [json.loads(row[0]) for row in conn.execute("SELECT body FROM online_evals ORDER BY rowid DESC LIMIT 100")]
 
 
+def read_golden_feedback(conn):
+    return [json.loads(row[0]) for row in conn.execute(
+        "SELECT body FROM golden_feedback ORDER BY revision"
+    )]
+
+
+@app.get("/api/evals/golden")
+def golden_dataset():
+    with db() as conn:
+        feedback = read_golden_feedback(conn)
+    snapshot = golden_snapshot(feedback)
+    return {"revision": len(feedback), "history": list(reversed(feedback)),
+            "cases": [{"scenario": row["case_id"], "expected_top_followup": row["expected_top_followup"]}
+                      for row in snapshot]}
+
+
+@app.post("/api/evals/online/{eval_id}/promote")
+def promote_feedback(eval_id: str, body: GoldenPromotion):
+    with db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        feedback = read_golden_feedback(conn)
+        if any(item["online_eval_id"] == eval_id for item in feedback):
+            raise HTTPException(409, "This reviewer action was already promoted.")
+        revision = len(feedback)
+        if revision != body.expected_revision:
+            raise HTTPException(409, "Golden dataset changed. Refresh Evaluation Lab and retry.")
+        row = conn.execute("SELECT body FROM online_evals WHERE id = ?", (eval_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "Online evaluation unavailable.")
+        evaluation = json.loads(row[0])
+        candidate = evaluation.get("feedback_candidate")
+        if not candidate or not candidate["matches_golden_input"]:
+            raise HTTPException(422, "Promotion requires a saved follow-up selection on an unedited golden fixture.")
+        selected = candidate["selected"]
+        previous = next(item["expected_top_followup"] for item in golden_snapshot(feedback)
+                        if item["case_id"] == candidate["scenario"])
+        if selected["request"] == previous:
+            raise HTTPException(409, "The selected follow-up already matches the golden target.")
+        promoted = {
+            "revision": revision + 1, "online_eval_id": eval_id, "case_id": evaluation["case_id"],
+            "run_id": evaluation["run_id"], "scenario": candidate["scenario"], "at": now(),
+            "previous_top_followup": previous, "expected_top_followup": selected["request"],
+            "reviewer": body.reviewer, "rationale": body.rationale,
+        }
+        conn.execute("INSERT INTO golden_feedback VALUES (?, ?, ?)",
+                     (promoted["revision"], eval_id, json.dumps(promoted)))
+    return promoted
+
+
 @app.get("/api/monitoring")
 def monitoring():
     with db() as conn:
@@ -344,7 +413,10 @@ def monitoring_dashboard():
         runs = [json.loads(row[0]) for row in conn.execute("SELECT body FROM runs")]
         online = [json.loads(row[0]) for row in conn.execute("SELECT body FROM online_evals")]
         offline = [json.loads(row[0]) for row in conn.execute("SELECT body FROM offline_eval_suites ORDER BY rowid DESC")]
-    return build_dashboard(cases, runs, online, offline, HISTORY, LABELS)
+        golden_revision = conn.execute("SELECT count(*) FROM golden_feedback").fetchone()[0]
+    dashboard = build_dashboard(cases, runs, online, offline, HISTORY, LABELS)
+    dashboard["evals"]["golden_revision"] = golden_revision
+    return dashboard
 
 
 @app.post("/api/evals")
@@ -352,12 +424,16 @@ def evals(publish: bool = False):
     if publish and not os.getenv("LANGSMITH_API_KEY"):
         raise HTTPException(400, "Configure LANGSMITH_API_KEY to publish an experiment.")
     try:
-        results = evaluate_local()
+        with db() as conn:
+            feedback = read_golden_feedback(conn)
+        snapshot = golden_snapshot(feedback)
+        results = evaluate_local(snapshot)
         checks = summarize_checks([check for result in results for check in result["checks"]])
         with db() as conn:
             save(conn, "offline_eval_suites", {"id": str(uuid4()), "at": now(),
-                 "case_count": len(results), **checks})
-        return {"results": results, "experiment": publish_experiment() if publish else None}
+                 "case_count": len(results), "golden_revision": len(feedback), **checks})
+        return {"results": results, "golden_revision": len(feedback),
+                "experiment": publish_experiment(snapshot) if publish else None}
     except Exception:
         logging.exception("Evaluation failed")
         raise HTTPException(502, "Evaluation failed. Check backend logs and provider configuration.")
