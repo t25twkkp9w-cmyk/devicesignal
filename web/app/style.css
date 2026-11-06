@@ -16,7 +16,7 @@ button{display:inline-flex;gap:7px;align-items:center;justify-content:center;bor
 .followup-options p{font-size:12px;margin:0 0 8px}
 .followup-options .check{align-items:flex-start;margin:6px 0}
 
-/* DeviceSignal clinical workspace */
+/* DeviceTrail clinical workspace */
 :root {
   --nav:#10233f;
   --ink:#152d4b;
@@ -68,3 +68,17 @@ h1 {font-weight:780;letter-spacing:-.045em}
 .history-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px}
 .history-heading .mono{color:var(--muted)}
 .history-record p{margin:6px 0 0;font-size:13px}
+
+.clinical-hero h2 {max-width:15ch}
+@media (prefers-reduced-motion: no-preference) {
+  .cta-nudge:not(:disabled) {
+    animation:cta-arrive 520ms ease-out both;
+    transition:transform 160ms ease, box-shadow 160ms ease;
+  }
+  .cta-nudge:not(:disabled):hover {transform:translateY(-1px);box-shadow:0 3px 9px #1454a035}
+  @keyframes cta-arrive {
+    from {transform:translateY(3px);box-shadow:0 0 0 0 #4e93e455}
+    55% {box-shadow:0 0 0 5px #4e93e433}
+    to {transform:translateY(0);box-shadow:0 0 0 9px #4e93e400}
+  }
+}

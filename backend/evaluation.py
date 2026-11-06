@@ -18,7 +18,7 @@ def examples():
         }
 
 
-@traceable(name="DeviceSignal Compliance eval target")
+@traceable(name="DeviceTrail eval target")
 def target(inputs):
     scenario = inputs["scenario"]
     case = {"scenario": scenario, "complaint": FIXTURES[scenario]["complaint"], "added_evidence": []}
@@ -52,11 +52,11 @@ def evaluate_local():
 
 def publish_experiment():
     client = Client()
-    name = os.getenv("LANGSMITH_DATASET", "DeviceSignal Compliance · Demo-P1 v2")
+    name = os.getenv("LANGSMITH_DATASET", "DeviceTrail · Demo-P1 v2")
     if not client.has_dataset(dataset_name=name):
         dataset = client.create_dataset(name, description="Three synthetic pump investigation scenarios")
         client.create_examples(dataset_id=dataset.id, examples=list(examples()))
     experiment = client.evaluate(
-        target, data=name, evaluators=[checks], experiment_prefix="devicesignal-compliance", max_concurrency=1
+        target, data=name, evaluators=[checks], experiment_prefix="devicetrail", max_concurrency=1
     )
     return experiment.experiment_name

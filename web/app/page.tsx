@@ -1,5 +1,6 @@
 'use client';
 
+import { APP_NAME, DESCRIPTION, TAGLINE } from './brand';
 import TriageFlow from './triage-flow';
 import HistoricalContext, { type HistoricalCase, type HistoricalCompliance } from './historical-context';
 import RankingComparison, { type RetrievalRanking } from './retrieval-ranking';
@@ -202,7 +203,7 @@ export default function Home() {
 
   return <div className="shell">
     <aside className="sidebar">
-      <div className="brand"><span><ShieldCheck size={23} /></span><div>DeviceSignal Compliance<small>MEDICAL DEVICE QUALITY</small></div></div>
+      <div className="brand"><span><ShieldCheck size={23} /></span><div>{APP_NAME}<small>MEDICAL DEVICE QUALITY</small></div></div>
       <div className="nav-label">WORKSPACE</div>
       <nav aria-label="Workspace">{nav.map(([id, label, Icon], index) => <div key={id}>
         {index === 6 && <div className="nav-label tools">TECHNICAL TOOLS</div>}
@@ -214,7 +215,7 @@ export default function Home() {
       <header className="top"><span>Workspace <b>/</b> {nav.find(item => item[0] === screen)?.[1]}</span><span className="demo"><span className="dot" /> DEMO ENVIRONMENT</span></header>
       <div className="content">
         <div className="heading"><div><p className="eyebrow">POST-MARKET QUALITY · DEMO-P1</p><h1>{titles[screen][0]}</h1><p className="muted">{titles[screen][1]}</p></div>
-          {screen === 'overview' && <button className="primary" disabled={!!busy} onClick={() => open('intake')}><Plus size={17} /> New complaint</button>}
+          {screen === 'overview' && <button className="primary cta-nudge" disabled={!!busy} onClick={() => open('intake')}><Plus size={17} /> New complaint</button>}
         </div>
         <div className="safety"><ShieldCheck size={18} /><div><strong>Human review required</strong><span> Synthetic data only. Summary approval covers draft wording. Regulatory decisions belong to authorized humans.</span></div></div>
         {error && <div role="alert" className="alert">{error} <button onClick={() => void task('Refreshing', refresh)} disabled={!!busy}>Reconnect / refresh</button></div>}
@@ -222,10 +223,10 @@ export default function Home() {
         {notice && <div role="status" className="progress">{notice}</div>}
 
         {screen === 'overview' && <>
-          <section className="clinical-hero" aria-label="DeviceSignal Compliance">
+          <section className="clinical-hero" aria-label={APP_NAME}>
             <p className="hero-kicker"><Activity size={16} /> MEDICAL DEVICE QUALITY</p>
-            <h2>Investigate with evidence.<br />Review with confidence.</h2>
-            <p>One workspace for device complaints, cited findings and human-controlled reporting.</p>
+            <h2>{TAGLINE}</h2>
+            <p>{DESCRIPTION}</p>
             <button onClick={() => open('flow')} disabled={!!busy}>Explore the workflow <ArrowRight size={16} /></button>
           </section>
           <div className="stats">
@@ -248,7 +249,7 @@ export default function Home() {
           {currentScenario && <dl><dt>Device</dt><dd>{currentScenario.device.model} · {currentScenario.device.device_id}</dd><dt>Reported event</dt><dd>{currentScenario.incident.event_date} · {currentScenario.incident.event_time || 'Time unavailable'}</dd><dt>Patient outcome</dt><dd>Unknown</dd></dl>}
           <label>Original complaint<textarea required maxLength={4000} rows={5} value={complaint} onChange={e => setComplaint(e.target.value)} /></label>
           <label className="check"><input type="checkbox" name="urgent" /> Flag for prompt quality review</label>
-          <div className="actions"><button disabled={!!busy || !selected}>Save draft</button><button className="primary" value="start" disabled={!!busy || !selected}>Start investigation <ArrowRight size={16} /></button></div>
+          <div className="actions"><button disabled={!!busy || !selected}>Save draft</button><button className="primary cta-nudge" value="start" disabled={!!busy || !selected}>Start investigation <ArrowRight size={16} /></button></div>
         </form></Panel>}
 
         {screen === 'queue' && <Panel title="Cases">
@@ -324,7 +325,7 @@ export default function Home() {
               </fieldset>}
               <label>Rationale / requested records<textarea name="rationale" required maxLength={4000} rows={3} /></label>
               {reviewAction === 'revise_assessment' && <label>Revised wording<textarea name="revision" required maxLength={4000} rows={3} /></label>}
-              <button className="primary" disabled={!!busy || (reviewAction !== 'escalate_to_quality' && (!active.draft || active.status === 'reviewed'))}>Record review</button>
+              <button className="primary cta-nudge" disabled={!!busy || (reviewAction !== 'escalate_to_quality' && (!active.draft || active.status === 'reviewed'))}>Record review</button>
             </form></Panel>
             <Panel title="Add evidence"><form key={active.id} onSubmit={event => addEvidence(event, active)}><label>Source label<input name="label" required maxLength={160} /></label><label>Evidence note<textarea name="text" required maxLength={4000} rows={3} /></label><button disabled={!!busy}>Save evidence</button></form></Panel>
           </div>
@@ -353,7 +354,7 @@ export default function Home() {
               <div className="form-grid"><label>Compliance reviewer<input name="reviewer" required maxLength={160} /></label>
                 <label>Decision<select name="decision" required defaultValue=""><option value="" disabled>Select a decision</option><option value="prepare_report">Prepare report for external filing</option><option value="no_report">Record decision not to report</option><option value="more_information">Request more information</option></select></label></div>
               <label>Decision rationale<textarea name="rationale" required maxLength={4000} rows={3} /></label>
-              <button className="primary" disabled={!!busy}>Record human decision</button>
+              <button className="primary cta-nudge" disabled={!!busy}>Record human decision</button>
             </form>}
             {active.disposition && <p><strong>{{prepare_report: 'Prepare report', no_report: 'No report', more_information: 'More information required'}[active.disposition.decision]}</strong> · {active.disposition.reviewer}<br />{active.disposition.rationale}</p>}
             {active.disposition?.decision === 'more_information' && <button onClick={() => open('case')}>Return to case to add evidence</button>}

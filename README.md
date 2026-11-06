@@ -1,6 +1,8 @@
-# DeviceSignal Compliance
+# DeviceTrail
 
-Standalone cohort demo for investigating three fictional Demo-P1 pump complaints. The seven screens cover overview, intake, queue, case workspace with human review, RAG explorer, evaluation lab and monitoring.
+*Trace the evidence. Document the decision.*
+
+Follow the evidence from a complaint through investigation, human review, and reporting handoff. The cohort demo includes three fictional Demo-P1 pump cases.
 
 [Clinical workspace preview](docs/clinical-overview.jpg) · [Investigation workflow](docs/investigation-workflow.jpg) · [Historical case context](docs/historical-context.jpg)
 
@@ -19,7 +21,7 @@ npm ci
 npm run dev -- --hostname 127.0.0.1
 ```
 
-Open http://127.0.0.1:3000. FastAPI's interactive API is at http://127.0.0.1:8000/docs. Next.js proxies API requests to FastAPI. Set `MDR_BACKEND_URL` before starting or building the UI if FastAPI runs on a different port. Run one backend process with its own writable state directory.
+Open http://127.0.0.1:3000. FastAPI's interactive API is at http://127.0.0.1:8000/docs. Next.js proxies API requests to FastAPI. Set `DEVICETRAIL_BACKEND_URL` before starting or building the UI if FastAPI runs on a different port. Run one backend process with its own writable state directory.
 
 ## Walk through the demo
 
@@ -34,11 +36,11 @@ Open http://127.0.0.1:3000. FastAPI's interactive API is at http://127.0.0.1:800
 - LangChain indexes the supplied fictional manual and SOP chunks using local token embeddings and cosine search, followed by a configurable OpenAI reranker or the local alarm-match fallback. Incident logs and the evaluator answer key stay outside the index. The checked-in sources are already split into versioned sections.
 - The default draft is deterministic. For optional OpenAI follow-up prioritization and reference reranking, copy `.env.example` to `.env`, set `OPENAI_API_KEY` and `OPENAI_MODEL` to a model available to your project with Responses API structured output, and restart FastAPI. The follow-up model returns a permutation of three proposed requests. The separate rerank step orders reference passages before the draft is built. Evidence wording, cause status and review transitions remain controlled by the application. See the [OpenAI text generation guide](https://developers.openai.com/api/docs/guides/text).
 - For LangSmith, set `LANGSMITH_API_KEY`, `LANGSMITH_TRACING=true` and `LANGSMITH_PROJECT`, then restart FastAPI. Run a case for traces and use **Run LangSmith experiment** in the lab to create or reuse the three-example dataset and run the structured checks. See [LangSmith evaluations](https://docs.langchain.com/langsmith/evaluate-llm-application).
-- The five automated checks measure cause status, citation coverage, reference retrieval, the human-review flag and missing-evidence routing. Claim support has a separate human-readable rubric. This three-case suite is a smoke test.
+- The eight offline checks cover cause status, citations, reference retrieval, historical matches and references, historical citation isolation, the human-review flag, and missing-evidence routing. Claim support has a separate human-readable rubric. This three-case suite is a smoke test.
 
 The demo accepts fictional inputs only. Reviewer names are entered locally for the demo audit trail. Summary approval covers wording. Regulatory decisions remain outside the demo and belong to authorized humans. Keep this single-user application on loopback.
 
-`MDR_STATE_DIR` selects a separate case and checkpoint database directory for each cohort or verification run.
+`DEVICETRAIL_STATE_DIR` selects a separate case and checkpoint database directory for each cohort or verification run.
 
 ## Complaint to reporting
 

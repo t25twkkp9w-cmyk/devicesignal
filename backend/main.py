@@ -20,12 +20,12 @@ from .evaluation import evaluate_local, publish_experiment
 from .online_evaluation import evaluate_action
 from .workflow import FIXTURES, HISTORY_REFERENCES, REFERENCES, build_graph, configured_reranker, rank_references, search
 
-ROOT = Path(os.getenv("MDR_STATE_DIR", ".state"))
+ROOT = Path(os.getenv("DEVICETRAIL_STATE_DIR") or os.getenv("MDR_STATE_DIR", ".state"))
 ROOT.mkdir(parents=True, exist_ok=True)
 LOCK = RLock()
 checkpoint_db = sqlite3.connect(ROOT / "checkpoints.sqlite", check_same_thread=False)
 GRAPH = build_graph(SqliteSaver(checkpoint_db))
-app = FastAPI(title="DeviceSignal Compliance")
+app = FastAPI(title="DeviceTrail")
 LABELS = {"DEMO-001": "Low battery", "DEMO-002": "Motor fault", "DEMO-003": "Missing evidence"}
 Short = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)]
 Narrative = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
@@ -167,7 +167,7 @@ def create_case(body: Intake):
     return case
 
 
-@traceable(name="DeviceSignal Compliance investigation")
+@traceable(name="DeviceTrail investigation")
 def investigate(case, run_id):
     trace = get_current_run_tree()
     result = GRAPH.invoke({"case": case}, config={"configurable": {"thread_id": run_id}})
