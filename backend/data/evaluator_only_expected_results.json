@@ -17,7 +17,11 @@
       "MAN-DEMO-P1-V1-BAT"
     ],
     "human_review_required": true,
-    "extra_check": "Distinguish low charge from a defective battery."
+    "extra_check": "Distinguish low charge from a defective battery.",
+    "expected_history_ids": [
+      "HIST-P1-001"
+    ],
+    "expected_history_report_refs": []
   },
   {
     "case_id": "DEMO-002",
@@ -37,7 +41,14 @@
       "MAN-DEMO-P1-V1-MOTOR"
     ],
     "human_review_required": true,
-    "extra_check": "Explain that 80% charge does not establish battery health and motor-fault cause remains unresolved."
+    "extra_check": "Explain that 80% charge does not establish battery health and motor-fault cause remains unresolved.",
+    "expected_history_ids": [
+      "HIST-P1-002",
+      "HIST-P1-004"
+    ],
+    "expected_history_report_refs": [
+      "SIM-HIST-2026-014"
+    ]
   },
   {
     "case_id": "DEMO-003",
@@ -57,6 +68,10 @@
       "SOP-DEMO-INV-V1-MISSING"
     ],
     "human_review_required": true,
-    "extra_check": "Unavailable logs must not be described as proof that no event was logged."
+    "extra_check": "Unavailable logs must not be described as proof that no event was logged.",
+    "expected_history_ids": [
+      "HIST-P1-003"
+    ],
+    "expected_history_report_refs": []
   }
 ]

@@ -1,12 +1,8 @@
-# DeviceSignal
+# DeviceSignal Compliance
 
 Standalone cohort demo for investigating three fictional Demo-P1 pump complaints. The seven screens cover overview, intake, queue, case workspace with human review, RAG explorer, evaluation lab and monitoring.
 
-## Project overview
-
-The demo follows fictional pump complaints from intake through incident lookup, versioned reference retrieval, optional OpenAI reranking, human review, and a local reporting handoff. Start with the Motor fault scenario to see how the device log and manual support a cited finding. The Evaluation Lab replays all three scenarios.
-
-[Clinical workspace preview](docs/clinical-overview.jpg) · [Investigation workflow](docs/investigation-workflow.jpg)
+[Clinical workspace preview](docs/clinical-overview.jpg) · [Investigation workflow](docs/investigation-workflow.jpg) · [Historical case context](docs/historical-context.jpg)
 
 ## Run locally
 
@@ -71,3 +67,14 @@ Open **RAG explorer → Load motor-fault comparison query → Search and rerank*
 Set `OPENAI_API_KEY` and `OPENAI_RERANK_MODEL` in the project-root `.env` to enable the model-based reranker. The model must support Responses API Structured Outputs. If `OPENAI_RERANK_MODEL` is unset, the app uses `OPENAI_MODEL`, which also enables the separate follow-up-ranking call. Restart FastAPI after changing these values. A missing configuration, provider error, or invalid candidate permutation uses local alarm-match ranking, and the app labels which path ran. The preset motor-fault comparison query intentionally mixes battery terms with the alarm code so the local ranking change is visible.
 
 The overview's fictional infusion-pump illustration is stored in `web/public/clinical-pump.jpg`. The rest of the workspace uses the same clinical-blue color and typography theme.
+
+
+## Historical case context and evals
+
+The synthetic closed-case source in `backend/data/historical_cases.json` includes issue, resolution, closure date, and a simulated historical compliance item when one exists. The motor-fault scenario matches two closed cases with different past reporting outcomes. Historical context is never a finding or a reporting decision for the current case.
+
+- LangGraph calls incident lookup, reference retrieval, and the historical lookup in parallel. The historical tool matches device model and scenario. Case Workspace shows the matched records separately from cited evidence. The optional follow-up model receives that same context.
+- RAG Explorer has separate **Manuals and procedures** and **Closed historical cases** scopes over the LangChain in-memory index. When enabled, OpenAI reranks candidates within the selected scope. Investigation citations still use the current evidence and reference corpus.
+- Reporting handoff snapshots the historical context in a separate section after a human chooses to prepare a handoff. A historical simulated reference is distinct from the current simulated receipt.
+- **Offline evals** run eight checks per golden fixture, including matched history, expected historical report references, and historical citation isolation. The optional hosted LangSmith dataset uses a new version name.
+- **Online evals** automatically score saved review, disposition, and receipt actions. They check reviewer attribution, resolving citation IDs, matching selected follow-ups, and linking handoffs and receipts to the right decisions. Results are persisted in SQLite and visible in Evaluation Lab. Monitoring shows per-run matches and eval counts. These checks cover workflow integrity. Semantic claim support remains a human rubric.

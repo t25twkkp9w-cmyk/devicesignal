@@ -18,7 +18,7 @@ def examples():
         }
 
 
-@traceable(name="MDR Sentinel eval target")
+@traceable(name="DeviceSignal Compliance eval target")
 def target(inputs):
     scenario = inputs["scenario"]
     case = {"scenario": scenario, "complaint": FIXTURES[scenario]["complaint"], "added_evidence": []}
@@ -34,6 +34,9 @@ def checks(outputs, reference_outputs):
         {"key": "citation_coverage", "score": len(required & set(actual["citations"])) / len(required)},
         {"key": "reference_retrieval", "score": int(set(actual["reference_ids"]) == {key for key in required if key.startswith(("MAN-", "SOP-"))})},
         {"key": "human_gate", "score": int(actual["human_review_required"] and expected["human_review_required"])},
+        {"key": "historical_case_match", "score": int(set(actual["history_ids"]) == set(expected["expected_history_ids"]))},
+        {"key": "historical_report_refs", "score": int(set(actual["historical_report_refs"]) == set(expected["expected_history_report_refs"]))},
+        {"key": "historical_citation_isolation", "score": int(not (set(actual["history_ids"]) & set(actual["citations"])))},
         {"key": "missing_evidence_route", "score": int(actual["needs_information"] == (expected["expected_cause_status"] == "undetermined"))},
     ]
 
@@ -49,11 +52,11 @@ def evaluate_local():
 
 def publish_experiment():
     client = Client()
-    name = os.getenv("LANGSMITH_DATASET", "MDR Sentinel · Demo-P1 v1")
+    name = os.getenv("LANGSMITH_DATASET", "DeviceSignal Compliance · Demo-P1 v2")
     if not client.has_dataset(dataset_name=name):
         dataset = client.create_dataset(name, description="Three synthetic pump investigation scenarios")
         client.create_examples(dataset_id=dataset.id, examples=list(examples()))
     experiment = client.evaluate(
-        target, data=name, evaluators=[checks], experiment_prefix="mdr-sentinel", max_concurrency=1
+        target, data=name, evaluators=[checks], experiment_prefix="devicesignal-compliance", max_concurrency=1
     )
     return experiment.experiment_name

@@ -17,14 +17,15 @@ from langsmith import get_current_run_tree, traceable
 from pydantic import BaseModel, Field, StringConstraints
 
 from .evaluation import evaluate_local, publish_experiment
-from .workflow import FIXTURES, REFERENCES, build_graph, configured_reranker, rank_references, search
+from .online_evaluation import evaluate_action
+from .workflow import FIXTURES, HISTORY_REFERENCES, REFERENCES, build_graph, configured_reranker, rank_references, search
 
 ROOT = Path(os.getenv("MDR_STATE_DIR", ".state"))
 ROOT.mkdir(parents=True, exist_ok=True)
 LOCK = RLock()
 checkpoint_db = sqlite3.connect(ROOT / "checkpoints.sqlite", check_same_thread=False)
 GRAPH = build_graph(SqliteSaver(checkpoint_db))
-app = FastAPI(title="MDR Sentinel demo")
+app = FastAPI(title="DeviceSignal Compliance")
 LABELS = {"DEMO-001": "Low battery", "DEMO-002": "Motor fault", "DEMO-003": "Missing evidence"}
 Short = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)]
 Narrative = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=4000)]
@@ -44,6 +45,10 @@ def db():
 with db() as connection:
     connection.execute("CREATE TABLE IF NOT EXISTS cases (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
     connection.execute("CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
+    connection.execute("""CREATE TABLE IF NOT EXISTS online_evals (
+        id TEXT PRIMARY KEY, run_id TEXT, body TEXT NOT NULL
+    )""")
+    connection.execute("CREATE INDEX IF NOT EXISTS online_evals_run ON online_evals(run_id)")
 
 
 def now():
@@ -72,6 +77,15 @@ def update(conn, case, **changes):
     return case
 
 
+def evaluate_saved_action(conn, case, event, entry):
+    row = {"id": str(uuid4()), "case_id": case["id"], "case_version": case["version"],
+           "run_id": case.get("run_id"), "event": event, "at": entry["at"],
+           "checks": evaluate_action(case, event, entry)}
+    conn.execute("INSERT INTO online_evals VALUES (?, ?, ?)",
+                 (row["id"], row["run_id"], json.dumps(row)))
+    return case
+
+
 class Intake(BaseModel):
     scenario: Literal["DEMO-001", "DEMO-002", "DEMO-003"]
     complaint: Narrative
@@ -80,6 +94,7 @@ class Intake(BaseModel):
 
 
 class ReferenceQuery(BaseModel):
+    corpus: Literal["reference", "history"] = "reference"
     query: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
 
 
@@ -142,7 +157,7 @@ def read_case(case_id: str):
 def create_case(body: Intake):
     fixture = FIXTURES[body.scenario]
     case = {
-        "id": f"MDR-{uuid4().hex[:8].upper()}", **body.model_dump(),
+        "id": f"DS-{uuid4().hex[:8].upper()}", **body.model_dump(),
         "title": LABELS[body.scenario], "device": fixture["device"], "incident": fixture["incident"],
         "version": 1, "status": "draft", "updated_at": now(), "received_at": now(), "added_evidence": [],
         "draft": None, "review_history": [], "run_id": None, "run_keys": {},
@@ -152,7 +167,7 @@ def create_case(body: Intake):
     return case
 
 
-@traceable(name="MDR Sentinel investigation")
+@traceable(name="DeviceSignal Compliance investigation")
 def investigate(case, run_id):
     trace = get_current_run_tree()
     result = GRAPH.invoke({"case": case}, config={"configurable": {"thread_id": run_id}})
@@ -183,13 +198,14 @@ def run_case(case_id: str, body: Version, idempotency_key: Annotated[str | None,
             result, trace_url = investigate(case, run_id)
             draft = result["draft"]
             status = "needs_information" if draft["needs_information"] else "ready_for_review"
-            run.update(status=status, trace_url=trace_url, tokens=draft["tokens"], mode=draft["mode"], rerank_mode=result["retrieval"]["mode"])
-            changes = {"draft": draft, "evidence": result["evidence"], "sources": result["sources"], "retrieval": result["retrieval"], "error": None}
+            run.update(status=status, trace_url=trace_url, tokens=draft["tokens"], mode=draft["mode"], rerank_mode=result["retrieval"]["mode"],
+                       history_ids=draft["history_ids"], historical_report_refs=draft["historical_report_refs"])
+            changes = {"draft": draft, "evidence": result["evidence"], "sources": result["sources"], "retrieval": result["retrieval"], "historical_cases": result["historical_cases"], "error": None}
         except Exception:
             logging.exception("Investigation failed (%s)", run_id)
             status = "failed"
             run["status"] = status
-            changes = {"draft": None, "error": "Investigation failed. Check backend configuration and retry."}
+            changes = {"draft": None, "historical_cases": None, "retrieval": None, "error": "Investigation failed. Check backend configuration and retry."}
         run["duration_ms"] = round((perf_counter() - start) * 1000)
         if idempotency_key:
             case["run_keys"][idempotency_key] = run_id
@@ -204,7 +220,7 @@ def add_evidence(case_id: str, body: Evidence):
         version(case, body.expected_version)
         item = {"evidence_id": f"NOTE-{uuid4().hex[:8]}", "kind": "reviewer_note", "label": body.label,
                 "text": body.text, "location": "Reviewer evidence", "timestamp": now()}
-        return update(conn, case, added_evidence=[*case["added_evidence"], item], status="draft", draft=None, retrieval=None, approved_summary=None, disposition=None, report=None)
+        return update(conn, case, added_evidence=[*case["added_evidence"], item], status="draft", draft=None, retrieval=None, historical_cases=None, approved_summary=None, disposition=None, report=None)
 
 
 @app.post("/api/cases/{case_id}/review")
@@ -243,7 +259,8 @@ def review_case(case_id: str, body: Review):
                 GRAPH.invoke(Command(resume=entry), config=config)
             changes["status"] = "reviewed"
             changes["approved_summary"] = {"draft": case["draft"], "review": entry}
-        return update(conn, case, **changes)
+        updated = update(conn, case, **changes)
+        return evaluate_saved_action(conn, updated, body.action, entry)
 
 
 @app.post("/api/cases/{case_id}/disposition")
@@ -265,10 +282,12 @@ def record_disposition(case_id: str, body: Disposition):
                 "device": case["device"], "complaint": case["complaint"], "incident": case["incident"],
                 "narrative": draft.get("reviewer_revision") or draft["interpretation"],
                 "cause_status": draft["cause_status"], "citations": draft["citations"],
+                "historical_context": case.get("historical_cases") or [],
                 "decision": decision, "synthetic": True,
             }
-        return update(conn, case, disposition=decision, report=report,
+        updated = update(conn, case, disposition=decision, report=report,
                       reporting_history=[*case.get("reporting_history", []), {"decision": decision, "report": report}])
+        return evaluate_saved_action(conn, updated, "disposition", decision)
 
 
 @app.post("/api/cases/{case_id}/filing-receipt")
@@ -281,8 +300,9 @@ def record_filing_receipt(case_id: str, body: FilingReceipt):
             raise HTTPException(409, "A current reporting handoff without a receipt is required.")
         receipt = {**body.model_dump(exclude={"expected_version"}), "at": now(), "report_id": report["id"]}
         report = {**report, "status": "external_receipt_recorded", "receipt": receipt}
-        return update(conn, case, report=report,
+        updated = update(conn, case, report=report,
                       reporting_history=[*case.get("reporting_history", []), {"receipt": receipt}])
+        return evaluate_saved_action(conn, updated, "filing_receipt", receipt)
 
 
 @app.get("/api/rag")
@@ -292,13 +312,27 @@ def rag(q: str = Query("", max_length=1000)):
 
 @app.post("/api/rag/rank")
 def rerank_references(body: ReferenceQuery):
-    return rank_references(body.query)
+    return rank_references(body.query, body.corpus)
+
+
+@app.get("/api/rag/history")
+def history_corpus():
+    return HISTORY_REFERENCES
+
+
+@app.get("/api/evals/online")
+def online_evals():
+    with db() as conn:
+        return [json.loads(row[0]) for row in conn.execute("SELECT body FROM online_evals ORDER BY rowid DESC LIMIT 100")]
 
 
 @app.get("/api/monitoring")
 def monitoring():
     with db() as conn:
-        return [json.loads(row[0]) for row in conn.execute("SELECT body FROM runs ORDER BY rowid DESC LIMIT 100")]
+        return [{**json.loads(body), "online_eval_count": count} for body, count in conn.execute(
+            """SELECT body, (SELECT count(*) FROM online_evals WHERE run_id = runs.id)
+               FROM runs ORDER BY rowid DESC LIMIT 100"""
+        )]
 
 
 @app.post("/api/evals")

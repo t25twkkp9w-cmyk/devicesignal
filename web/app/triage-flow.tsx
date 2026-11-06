@@ -48,10 +48,10 @@ export default function TriageFlow() {
       <h2>Complaint to reporting</h2>
       <ol className="triage-flow">
         <li><strong>Capture the complaint</strong><p>Preserve the narrative, channel and receipt time. Validate the selected pump case.</p><span className="badge">Intake · application rules</span></li>
-        <li><strong>Gather evidence in parallel</strong><p>Look up the incident record by scenario. Search the versioned manual and procedure for the alarm or evidence gap.</p><span className="badge">Tool calls · incident lookup + RAG</span></li>
-        <li><strong>Draft and verify</strong><p>Evidence rules produce the finding. If configured, OpenAI ranks three proposed follow-ups. The workflow checks that citation IDs resolve.</p><span className="badge">Optional model call · follow-up ranking</span></li>
+        <li><strong>Gather evidence in parallel</strong><p>Look up the current incident, search the manual and procedure corpus, and fetch closed historical cases for the same device and scenario.</p><span className="badge">Tool calls · incident lookup + RAG + case history</span></li>
+        <li><strong>Draft and verify</strong><p>Evidence rules produce the finding. If configured, OpenAI reranks reference passages and separately ranks follow-up requests using current evidence and historical context. The workflow checks that citation IDs resolve.</p><span className="badge">Optional model calls · reference reranking and follow-up ranking</span></li>
         <li><strong>Pause for review</strong><p>Quality reviews the evidence, approves or revises the draft, or requests more information and reruns with the new evidence.</p><span className="badge">Human gate · investigation draft</span></li>
-        <li><strong>Record a reporting disposition</strong><p>A person records the decision and rationale. Choosing Prepare report creates a cited handoff. An external filing reference can be recorded afterward.</p><span className="badge">Human decision · application write</span></li>
+        <li><strong>Record a reporting disposition</strong><p>A person records the decision and rationale. Choosing Prepare report creates a cited handoff with historical context attached separately. An external filing reference can be recorded afterward.</p><span className="badge">Human decision · application write</span></li>
       </ol>
     </section>
     <div className="scenario-grid">{examples.map(item => <section className="panel" key={item.title}><h2>{item.title}</h2><p><strong>Incident lookup</strong><br />{item.finding}</p><p><strong>RAG</strong><br />{item.reference}</p><p><strong>Review</strong><br />{item.review}</p></section>)}</div>
@@ -64,6 +64,18 @@ export default function TriageFlow() {
       <p><strong>Running cohort app.</strong> Scenario fields and evidence rules replace model extraction and triage. LangChain uses local token vectors for candidate retrieval. OpenAI can rerank the passages, with exact alarm-code priority as the local fallback. The verifier checks citation IDs. When configured, OpenAI ranks the three proposed evidence requests.</p>
       <p>In <strong>Human review</strong>, select any ranked follow-up and record your rationale, or write your own request, revise the draft, or escalate. The selected request and its origin are recorded in review history. Reporting disposition is a separate human action.</p>
     </section>
-    <section className="panel"><h2>Evaluate the workflow separately</h2><p>Evaluation Lab replays all three scenarios against an evaluator-only answer key and checks cause status, references, citations, the review flag and missing-evidence routing.</p></section>
+    <section className="panel"><h2>Technology stack</h2><div className="table-wrap"><table>
+      <thead><tr><th>Layer</th><th>Technology</th><th>What moves through it</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Intake and routing</th><td>Next.js · FastAPI · LangGraph</td><td>Complaint, case ID, parallel tool results, and review checkpoint.</td></tr>
+        <tr><th scope="row">Evidence and history</th><td>JSON fixtures · LangChain · in-memory vector index</td><td>Current incident records, versioned guidance, and separately searchable historical cases.</td></tr>
+        <tr><th scope="row">Model calls</th><td>OpenAI Responses API</td><td>Candidate passages for reranking, and current evidence plus closed-case context for follow-up ranking.</td></tr>
+        <tr><th scope="row">Review and reporting</th><td>SQLite · LangGraph checkpoints</td><td>Reviewer actions, approved draft, separate disposition, cited handoff, and simulated receipt.</td></tr>
+        <tr><th scope="row">Monitoring and evals</th><td>SQLite event records · optional LangSmith</td><td>Run metadata and trace links, offline replay scores, and online checks on saved reviewer actions.</td></tr>
+      </tbody>
+    </table></div></section>
+    <section className="panel"><h2>Offline and online evals</h2>
+      <p>Offline evals replay the golden cases against a separate answer key. Online evals run as reviewers save actions and check attribution, evidence links, selected follow-ups, handoffs and receipts.</p>
+    </section>
   </>;
 }

@@ -64,3 +64,7 @@ h1 {font-weight:780;letter-spacing:-.045em}
 @media(max-width:730px){
   .clinical-hero{padding:24px 18px;background-image:linear-gradient(90deg,#0d233ff5 0%,#0d233fcc 65%,#0d233f7a 100%),url("/clinical-pump.jpg")}
 }
+.history-record{border:1px solid var(--edge);border-radius:10px;padding:13px 15px;margin:10px 0;background:#f8fbff}
+.history-heading{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px}
+.history-heading .mono{color:var(--muted)}
+.history-record p{margin:6px 0 0;font-size:13px}

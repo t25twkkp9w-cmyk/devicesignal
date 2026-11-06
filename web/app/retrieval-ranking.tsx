@@ -2,7 +2,7 @@ export type RankedReference = { source_id: string; document_id: string; section:
 
 export type RetrievalRanking = {
   query: string;
-  mode: 'openai' | 'alarm_rules';
+  mode: 'openai' | 'alarm_rules' | 'vector_only';
   model: string | null;
   response_id: string | null;
   fallback: string | null;
@@ -18,7 +18,7 @@ export default function RankingComparison({ ranking }: { ranking: RetrievalRanki
 
   return <div className="ranking-comparison">
     <div className="ranking-meta">
-      <strong>{ranking.mode === 'openai' ? 'OpenAI reranker · ' + ranking.model : 'Local alarm-match ranking'}</strong>
+      <strong>{ranking.mode === 'openai' ? 'OpenAI reranker · ' + ranking.model : ranking.mode === 'vector_only' ? 'Local cosine ranking' : 'Local alarm-match ranking'}</strong>
       {ranking.response_id && <span className="mono">{ranking.response_id}</span>}
       <p>{ranking.fallback === 'provider_error' ? 'The model call failed or returned an invalid order. Local ranking was used.' :
         ranking.fallback === 'not_configured' ? 'Configure an OpenAI key and rerank model to enable model ranking.' :

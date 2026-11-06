@@ -1,6 +1,7 @@
 'use client';
 
 import TriageFlow from './triage-flow';
+import HistoricalContext, { type HistoricalCase, type HistoricalCompliance } from './historical-context';
 import RankingComparison, { type RetrievalRanking } from './retrieval-ranking';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Activity, ArrowRight, BookOpen, ClipboardList, FlaskConical, LayoutDashboard, Plus, Search, ShieldCheck, TriangleAlert, Workflow } from 'lucide-react';
@@ -8,19 +9,20 @@ import { Activity, ArrowRight, BookOpen, ClipboardList, FlaskConical, LayoutDash
 type Scenario = { id: string; label: string; complaint: string; device: { device_id: string; model: string }; incident: Incident };
 type Incident = { event_date: string; event_time: string | null; battery_percent: number | null; alarm_code: string | null; shutdown_reason: string | null };
 type Evidence = { evidence_id: string; label: string; kind: string; location: string; text: string; timestamp: string | null };
-type Source = { source_id: string; document_id: string; section: string; version: string; text: string; score?: number };
+type Source = { source_id: string; document_id: string; section: string; version: string; text: string; score?: number; corpus?: string; compliance?: HistoricalCompliance };
 type ModelCall = {
   model: string; response_id: string | null; instruction: string; reference_id: string; tokens: number | null;
-  input: { evidence: Evidence[]; reference: string; followups: string[] };
+  input: { evidence: Evidence[]; reference: string; followups: string[]; historical_context?: HistoricalCase[] };
   output: { order: number[] };
 };
 type Draft = { model_call?: ModelCall | null; interpretation: string; cause_status: string; citations: string[]; followups: string[]; mode: string; reviewer_revision?: string };
 type Review = { action: string; reviewer: string; rationale: string; at: string; draft_version: number; selected_followup?: { request: string; rank: number; origin: string } | null };
 type Disposition = { decision: string; reviewer: string; rationale: string; at: string };
-type Report = { id: string; status: string; narrative: string; citations: string[]; receipt?: { reviewer: string; reference: string; at: string } };
-type Case = { retrieval?: RetrievalRanking | null; disposition?: Disposition | null; report?: Report | null; reporting_history?: { decision?: Disposition; receipt?: Report['receipt'] }[]; id: string; scenario: string; title: string; complaint: string; status: string; version: number; device: Scenario['device']; incident: Incident; urgent: boolean; draft: Draft | null; evidence?: Evidence[]; sources?: Source[]; added_evidence: Evidence[]; updated_at: string; error?: string; review_history: Review[] };
-type Run = { id: string; case_id: string; created_at: string; status: string; duration_ms: number; tokens: number | null; trace_url: string | null; mode?: string; rerank_mode?: string };
+type Report = { historical_context?: HistoricalCase[]; id: string; status: string; narrative: string; citations: string[]; receipt?: { reviewer: string; reference: string; at: string } };
+type Case = { historical_cases?: HistoricalCase[] | null; retrieval?: RetrievalRanking | null; disposition?: Disposition | null; report?: Report | null; reporting_history?: { decision?: Disposition; receipt?: Report['receipt'] }[]; id: string; scenario: string; title: string; complaint: string; status: string; version: number; device: Scenario['device']; incident: Incident; urgent: boolean; draft: Draft | null; evidence?: Evidence[]; sources?: Source[]; added_evidence: Evidence[]; updated_at: string; error?: string; review_history: Review[] };
+type Run = { id: string; case_id: string; created_at: string; status: string; duration_ms: number; tokens: number | null; trace_url: string | null; mode?: string; rerank_mode?: string; history_ids?: string[]; historical_report_refs?: string[]; online_eval_count?: number };
 type Evaluation = { experiment: string | null; results: { actual: Draft; expected: { case_id: string; expected_cause_status: string; must_include: string[]; must_not_claim: string[]; extra_check: string }; checks: { key: string; score: number }[] }[] };
+type OnlineEval = { id: string; case_id: string; run_id: string | null; event: string; at: string; checks: { key: string; score: number }[] };
 type Health = { model: string | null; tracing: boolean; langsmith_configured: boolean };
 
 const nav = [
@@ -70,6 +72,8 @@ export default function Home() {
   const [filter, setFilter] = useState('');
   const [query, setQuery] = useState('');
   const [sources, setSources] = useState<Source[]>([]);
+  const [corpus, setCorpus] = useState<'reference' | 'history'>('reference');
+  const [onlineEvals, setOnlineEvals] = useState<OnlineEval[]>([]);
   const [ranking, setRanking] = useState<RetrievalRanking | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [evaluation, setEvaluation] = useState<Evaluation>();
@@ -112,9 +116,11 @@ export default function Home() {
     setScreen(screen);
     if (screen === 'queue' || screen === 'overview' || screen === 'reporting') void task('Refreshing cases', refresh);
     if (screen === 'rag') void task('Loading corpus', async () => {
+      setCorpus('reference');
       setRanking(null);
       setSources(await api<Source[]>('/rag'));
     });
+    if (screen === 'evals') void task('Loading online evals', async () => setOnlineEvals(await api<OnlineEval[]>('/evals/online')));
     if (screen === 'monitor') void task('Loading runs', async () => setRuns(await api<Run[]>('/monitoring')));
   }
 
@@ -189,14 +195,14 @@ export default function Home() {
     case: ['Case workspace', 'Inspect reported facts, incident records and draft findings side by side.'],
     flow: ['Workflow map', 'Follow all three pump examples from intake through the human reporting decision.'],
     reporting: ['Reporting handoff', 'Review dispositions, prepare a handoff record and record a simulated external receipt.'],
-    rag: ['RAG explorer', 'Search versioned passages from the fictional Demo-P1 manual and investigation procedure.'],
-    evals: ['Evaluation lab', 'Run the three scenarios against a separate evaluator-only answer key.'],
+    rag: ['RAG explorer', 'Search versioned manuals, procedures, and a separate corpus of fictional closed cases.'],
+    evals: ['Evaluation lab', 'Replay golden fixtures offline and inspect checks recorded on real demo review actions.'],
     monitor: ['Monitoring', 'Inspect measured investigation runs and open LangSmith traces when configured.'],
   };
 
   return <div className="shell">
     <aside className="sidebar">
-      <div className="brand"><span><ShieldCheck size={23} /></span><div>DeviceSignal<small>QUALITY & COMPLIANCE</small></div></div>
+      <div className="brand"><span><ShieldCheck size={23} /></span><div>DeviceSignal Compliance<small>MEDICAL DEVICE QUALITY</small></div></div>
       <div className="nav-label">WORKSPACE</div>
       <nav aria-label="Workspace">{nav.map(([id, label, Icon], index) => <div key={id}>
         {index === 6 && <div className="nav-label tools">TECHNICAL TOOLS</div>}
@@ -216,7 +222,7 @@ export default function Home() {
         {notice && <div role="status" className="progress">{notice}</div>}
 
         {screen === 'overview' && <>
-          <section className="clinical-hero" aria-label="DeviceSignal quality and compliance">
+          <section className="clinical-hero" aria-label="DeviceSignal Compliance">
             <p className="hero-kicker"><Activity size={16} /> MEDICAL DEVICE QUALITY</p>
             <h2>Investigate with evidence.<br />Review with confidence.</h2>
             <p>One workspace for device complaints, cited findings and human-controlled reporting.</p>
@@ -273,6 +279,7 @@ export default function Home() {
             }}>{id}</button>)}</div><h3>Proposed follow-up</h3><ul>{active.draft.followups.map(item => <li key={item}>{item}</li>)}</ul>
               {active.draft.reviewer_revision && <><h3>Reviewer wording</h3><p>{active.draft.reviewer_revision}</p></>}<small className="muted">Drafting mode · {active.draft.mode}</small></> : <p className="muted">A verified draft appears here after investigation.</p>}</Panel>
           </div>
+          {active.historical_cases && <Panel title="Historical case context"><HistoricalContext cases={active.historical_cases} /></Panel>}
           {active.draft && active.retrieval && <Panel title="Reference retrieval and reranking">
             <p>Query · <code>{active.retrieval.query}</code></p>
             <RankingComparison ranking={active.retrieval} />
@@ -293,6 +300,10 @@ export default function Home() {
                   <p className="muted">This ranking informs follow-up. The cause finding and reporting decision are separate.</p>
                 </div>
               </div>
+              {active.draft.model_call.input.historical_context && <details>
+                <summary>Historical context sent to the follow-up model</summary>
+                <HistoricalContext cases={active.draft.model_call.input.historical_context} />
+              </details>}
               <details><summary>Inspect model instruction and exact JSON input</summary><p>{active.draft.model_call.instruction}</p>
                 <pre className="model-payload">{JSON.stringify(active.draft.model_call.input, null, 2)}</pre></details>
             </> : <p className="muted">This run has no captured OpenAI response. New runs with OpenAI enabled show the evidence and returned ranking here.</p>}
@@ -335,6 +346,9 @@ export default function Home() {
           </label><p className="muted">Synthetic records only. Filing occurs outside the app. Use a simulated receipt for the demo.</p></Panel>
           {active && <Panel title={active.title + ' · ' + active.id}>
             {active.status !== 'reviewed' && <p className="muted">Approve the current investigation summary in Case Workspace before recording a reporting disposition.</p>}
+            {!active.report && !!active.historical_cases?.length && <details><summary>Historical cases for comparison</summary>
+              <HistoricalContext cases={active.historical_cases} />
+            </details>}
             {active.status === 'reviewed' && !active.disposition && <form key={active.id} onSubmit={event => submitReporting(event, active, 'disposition')}>
               <div className="form-grid"><label>Compliance reviewer<input name="reviewer" required maxLength={160} /></label>
                 <label>Decision<select name="decision" required defaultValue=""><option value="" disabled>Select a decision</option><option value="prepare_report">Prepare report for external filing</option><option value="no_report">Record decision not to report</option><option value="more_information">Request more information</option></select></label></div>
@@ -346,6 +360,9 @@ export default function Home() {
             {active.report && <div className="record">
               <h3>Reporting handoff · {active.report.id}</h3><p>{active.report.narrative}</p>
               <p className="mono">{active.report.citations.join(' · ')}</p>
+              {!!active.report.historical_context?.length && <details><summary>Historical context attached to handoff</summary>
+                <HistoricalContext cases={active.report.historical_context} />
+              </details>}
               {active.report.receipt ? <p>External receipt recorded · {active.report.receipt.reference} · {active.report.receipt.reviewer}</p> :
                 <form key={active.report.id} onSubmit={event => submitReporting(event, active, 'filing-receipt')}>
                   <div className="form-grid"><label>Recorded by<input name="reviewer" required maxLength={160} /></label><label>Simulated external reference<input name="reference" required maxLength={160} /></label></div>
@@ -359,32 +376,49 @@ export default function Home() {
         </>}
 
         {screen === 'rag' && <><Panel title="Search reference corpus">
+          <label className="filter">Corpus<select value={corpus} disabled={!!busy} onChange={e => {
+            const next = e.target.value as 'reference' | 'history';
+            setCorpus(next);
+            setRanking(null);
+            setSources([]);
+            void task('Loading corpus', async () => setSources(await api<Source[]>(next === 'history' ? '/rag/history' : '/rag')));
+          }}><option value="reference">Manuals and procedures</option><option value="history">Closed historical cases</option></select></label>
           <form className="search" onSubmit={e => { e.preventDefault(); void task('Retrieving and reranking passages', async () => {
-            const result = await api<RetrievalRanking>('/rag/rank', { query });
+            const result = await api<RetrievalRanking>('/rag/rank', { query, corpus });
             setRanking(result);
             setSources(result.after);
           }); }}>
             <label><span className="sr-only">Search query</span><input required value={query} maxLength={1000} onChange={e => setQuery(e.target.value)} placeholder="Try BAT-LOW or MOTOR FAULT" /></label>
             <button className="primary" disabled={!!busy}><Search size={16} /> Search and rerank</button>
           </form>
-          <p className="muted">Compare first-pass cosine similarity with the final relevance order.</p>
+          <p className="muted">{corpus === 'history' ? 'Historical issues and resolutions are searchable as context. Current investigation citations use manuals and procedures.' : 'Compare first-pass cosine similarity with the final relevance order.'}</p>
           <button disabled={!!busy} onClick={() => setQuery('MOTOR_FAULT battery charge external power low reported battery charge')}>Load motor-fault comparison query</button>
           {ranking && <RankingComparison ranking={ranking} />}
         </Panel>
-          {sources.map(source => <Panel key={source.source_id} title={source.section}><span className="mono">{source.document_id} · v{source.version}</span>{source.score !== undefined && <span className="badge">Cosine {source.score.toFixed(3)}</span>}<p>{source.text}</p><small className="muted">{source.source_id}</small></Panel>)}</>}
+          {sources.map(source => <Panel key={source.source_id} title={source.section}><span className="mono">{source.document_id} · v{source.version}</span>{source.score !== undefined && <span className="badge">Cosine {source.score.toFixed(3)}</span>}<p>{source.text}</p>{source.compliance && <p><strong>Historical compliance</strong> · {source.compliance.disposition}{source.compliance.reference && <> · <span className="mono">{source.compliance.reference}</span> · {source.compliance.item}</>}</p>}<small className="muted">{source.source_id}</small></Panel>)}</>}
 
-        {screen === 'evals' && <><Panel title="Three-scenario smoke suite"><p>Checks cause status, citation coverage, reference retrieval, the human-review flag and routing for missing evidence. Read the draft against the rubric for claim support.</p><div className="actions">
+        {screen === 'evals' && <><Panel title="Offline evals"><p>Replay three golden cases to check cause status, retrieval, historical matches and filing references, citation isolation, and review routing. The claim-support rubric is available for human inspection.</p><div className="actions">
           <button className="primary" disabled={!!busy} onClick={() => void task('Running local evaluations', async () => { const result = await api<Evaluation>('/evals', {}); setPrevious(evaluation); setEvaluation(result); })}><FlaskConical size={16} /> Run local suite</button>
           <button disabled={!!busy || !health?.langsmith_configured} onClick={() => void task('Publishing LangSmith experiment', async () => { const result = await api<Evaluation>('/evals?publish=true', {}); setPrevious(evaluation); setEvaluation(result); })}>Run LangSmith experiment</button></div>
           {!health?.langsmith_configured && <p className="muted">Set LANGSMITH_API_KEY in the backend to enable experiments.</p>}
           {evaluation?.experiment && <p>LangSmith experiment · {evaluation.experiment}</p>}
           {previous && <p className="muted">Previous suite · {previous.results.flatMap(item => item.checks).filter(check => check.score === 1).length} fully passed checks</p>}
         </Panel>
-          {evaluation?.results.map(row => <Panel key={row.expected.case_id} title={row.expected.case_id}><p>Expected cause status <strong>{row.expected.expected_cause_status}</strong> · Actual <strong>{row.actual.cause_status}</strong></p><p>{row.actual.interpretation}</p><div className="checks">{row.checks.map(check => <span className="badge" key={check.key}>{check.key.replaceAll('_', ' ')} · {Math.round(check.score * 100)}%</span>)}</div><details><summary>Read claim-support rubric</summary><p>{row.expected.extra_check}</p><ul>{row.expected.must_include.map(claim => <li key={claim}>{claim}</li>)}</ul><p>Unsupported claims to watch for</p><ul>{row.expected.must_not_claim.map(claim => <li key={claim}>{claim}</li>)}</ul></details></Panel>)}</>}
+          {evaluation?.results.map(row => <Panel key={row.expected.case_id} title={row.expected.case_id}><p>Expected cause status <strong>{row.expected.expected_cause_status}</strong> · Actual <strong>{row.actual.cause_status}</strong></p><p>{row.actual.interpretation}</p><div className="checks">{row.checks.map(check => <span className="badge" key={check.key}>{check.key.replaceAll('_', ' ')} · {Math.round(check.score * 100)}%</span>)}</div><details><summary>Read claim-support rubric</summary><p>{row.expected.extra_check}</p><ul>{row.expected.must_include.map(claim => <li key={claim}>{claim}</li>)}</ul><p>Unsupported claims to watch for</p><ul>{row.expected.must_not_claim.map(claim => <li key={claim}>{claim}</li>)}</ul></details></Panel>)}
+          <Panel title="Online evals">
+            <p>Automatically scored when a reviewer saves a review, disposition, or simulated receipt. These deterministic checks cover saved actions and evidence links.</p>
+            <button disabled={!!busy} onClick={() => void task('Refreshing online evals', async () => setOnlineEvals(await api<OnlineEval[]>('/evals/online')))}>Refresh online results</button>
+            {!onlineEvals.length && <p className="empty">No reviewer actions scored yet.</p>}
+            {onlineEvals.map(item => <div className="record" key={item.id}>
+              <strong>{item.case_id} · {item.event.replaceAll('_', ' ')}</strong>
+              <small>{new Date(item.at).toLocaleString()}{item.run_id && <> · Run {item.run_id}</>}</small>
+              <div className="checks">{item.checks.map(check => <span className={'badge ' + (check.score ? 'reviewed' : 'failed')} key={check.key}>{check.key.replaceAll('_',' ')} · {check.score ? 'Pass' : 'Fail'}</span>)}</div>
+            </div>)}
+          </Panel></>}
 
         {screen === 'monitor' && <Panel title="Investigation runs"><div className="actions"><Badge status={health?.tracing ? 'LangSmith tracing configured' : 'Local metrics'} /><button disabled={!!busy} onClick={() => open('monitor')}>Refresh runs</button></div>
-          <div className="table-wrap"><table><thead><tr><th>Run / Case</th><th>Status</th><th>Latency</th><th>Tokens</th><th>Trace</th></tr></thead><tbody>
-            {runs.map(run => <tr key={run.id}><td><strong>{run.case_id}</strong><small className="mono">{run.id}</small><small>{new Date(run.created_at).toLocaleString()} · {run.mode || '—'}</small>{run.rerank_mode && <small>Rerank · {run.rerank_mode === 'openai' ? 'OpenAI' : 'Local rules'}</small>}</td><td><Badge status={run.status} /></td><td>{run.duration_ms} ms</td><td>{run.tokens ?? '—'}</td><td>{run.trace_url ? <a href={run.trace_url} target="_blank" rel="noreferrer">Open trace ↗</a> : '—'}</td></tr>)}
+          <div className="table-wrap"><table><thead><tr><th>Run / Case</th><th>Status</th><th>Latency</th><th>Tokens</th><th>History / online evals</th><th>Trace</th></tr></thead><tbody>
+            {runs.map(run => <tr key={run.id}><td><strong>{run.case_id}</strong><small className="mono">{run.id}</small><small>{new Date(run.created_at).toLocaleString()} · {run.mode || '—'}</small>{run.rerank_mode && <small>Rerank · {run.rerank_mode === 'openai' ? 'OpenAI' : 'Local rules'}</small>}</td><td><Badge status={run.status} /></td><td>{run.duration_ms} ms</td><td>{run.tokens ?? '—'}</td><td>{run.history_ids?.join(', ') || '—'}<small>{run.historical_report_refs?.join(', ')}</small><small>{run.online_eval_count ?? 0} online eval records</small></td><td>{run.trace_url ? <a href={run.trace_url} target="_blank" rel="noreferrer">Open trace ↗</a> : '—'}</td></tr>)}
           </tbody></table></div>{runs.length === 0 && <p className="empty">Run a case to see its investigation metrics here.</p>}</Panel>}
       </div>
     </main>
