@@ -82,3 +82,12 @@ h1 {font-weight:780;letter-spacing:-.045em}
     to {transform:translateY(0);box-shadow:0 0 0 9px #4e93e400}
   }
 }
+
+.monitor-actions{margin:0 0 16px}
+.monitor-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px}
+.monitor-stat{background:#f6faff;box-shadow:none}
+.monitor-stat small{display:block;color:var(--muted);font-size:11px;margin-top:4px}
+.monitor-breakdown{padding:12px 14px;border:1px solid var(--edge);border-radius:10px}
+.monitor-bar-row{display:grid;grid-template-columns:1fr auto;gap:4px 12px;margin-top:10px;font-size:13px}
+.monitor-bar{grid-column:1/-1;height:6px;border-radius:8px;background:#e7eff8;overflow:hidden}
+.monitor-bar>div{height:100%;border-radius:inherit;background:#3777b8}

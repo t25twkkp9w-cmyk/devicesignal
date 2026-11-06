@@ -18,7 +18,8 @@ from pydantic import BaseModel, Field, StringConstraints
 
 from .evaluation import evaluate_local, publish_experiment
 from .online_evaluation import evaluate_action
-from .workflow import FIXTURES, HISTORY_REFERENCES, REFERENCES, build_graph, configured_reranker, rank_references, search
+from .monitoring import build_dashboard, summarize_checks
+from .workflow import FIXTURES, HISTORY, HISTORY_REFERENCES, REFERENCES, build_graph, configured_reranker, rank_references, search
 
 ROOT = Path(os.getenv("DEVICETRAIL_STATE_DIR") or os.getenv("MDR_STATE_DIR", ".state"))
 ROOT.mkdir(parents=True, exist_ok=True)
@@ -49,6 +50,7 @@ with db() as connection:
         id TEXT PRIMARY KEY, run_id TEXT, body TEXT NOT NULL
     )""")
     connection.execute("CREATE INDEX IF NOT EXISTS online_evals_run ON online_evals(run_id)")
+    connection.execute("CREATE TABLE IF NOT EXISTS offline_eval_suites (id TEXT PRIMARY KEY, body TEXT NOT NULL)")
 
 
 def now():
@@ -335,12 +337,27 @@ def monitoring():
         )]
 
 
+@app.get("/api/monitoring/dashboard")
+def monitoring_dashboard():
+    with db() as conn:
+        cases = [json.loads(row[0]) for row in conn.execute("SELECT body FROM cases")]
+        runs = [json.loads(row[0]) for row in conn.execute("SELECT body FROM runs")]
+        online = [json.loads(row[0]) for row in conn.execute("SELECT body FROM online_evals")]
+        offline = [json.loads(row[0]) for row in conn.execute("SELECT body FROM offline_eval_suites ORDER BY rowid DESC")]
+    return build_dashboard(cases, runs, online, offline, HISTORY, LABELS)
+
+
 @app.post("/api/evals")
 def evals(publish: bool = False):
     if publish and not os.getenv("LANGSMITH_API_KEY"):
         raise HTTPException(400, "Configure LANGSMITH_API_KEY to publish an experiment.")
     try:
-        return {"results": evaluate_local(), "experiment": publish_experiment() if publish else None}
+        results = evaluate_local()
+        checks = summarize_checks([check for result in results for check in result["checks"]])
+        with db() as conn:
+            save(conn, "offline_eval_suites", {"id": str(uuid4()), "at": now(),
+                 "case_count": len(results), **checks})
+        return {"results": results, "experiment": publish_experiment() if publish else None}
     except Exception:
         logging.exception("Evaluation failed")
         raise HTTPException(502, "Evaluation failed. Check backend logs and provider configuration.")

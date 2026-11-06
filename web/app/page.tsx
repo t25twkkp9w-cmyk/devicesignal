@@ -2,6 +2,7 @@
 
 import { APP_NAME, DESCRIPTION, TAGLINE } from './brand';
 import TriageFlow from './triage-flow';
+import MonitoringDashboard, { type MonitoringStats } from './monitoring-dashboard';
 import HistoricalContext, { type HistoricalCase, type HistoricalCompliance } from './historical-context';
 import RankingComparison, { type RetrievalRanking } from './retrieval-ranking';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
@@ -77,6 +78,7 @@ export default function Home() {
   const [onlineEvals, setOnlineEvals] = useState<OnlineEval[]>([]);
   const [ranking, setRanking] = useState<RetrievalRanking | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [monitorStats, setMonitorStats] = useState<MonitoringStats | null>(null);
   const [evaluation, setEvaluation] = useState<Evaluation>();
   const [previous, setPrevious] = useState<Evaluation>();
   const [sourceView, setSourceView] = useState<{ label: string; location: string; text: string } | null>(null);
@@ -122,7 +124,11 @@ export default function Home() {
       setSources(await api<Source[]>('/rag'));
     });
     if (screen === 'evals') void task('Loading online evals', async () => setOnlineEvals(await api<OnlineEval[]>('/evals/online')));
-    if (screen === 'monitor') void task('Loading runs', async () => setRuns(await api<Run[]>('/monitoring')));
+    if (screen === 'monitor') void task('Loading monitoring dashboard', async () => {
+      const [dashboard, recentRuns] = await Promise.all([api<MonitoringStats>('/monitoring/dashboard'), api<Run[]>('/monitoring')]);
+      setMonitorStats(dashboard);
+      setRuns(recentRuns);
+    });
   }
 
   function store(record: Case) {
@@ -198,7 +204,7 @@ export default function Home() {
     reporting: ['Reporting handoff', 'Review dispositions, prepare a handoff record and record a simulated external receipt.'],
     rag: ['RAG explorer', 'Search versioned manuals, procedures, and a separate corpus of fictional closed cases.'],
     evals: ['Evaluation lab', 'Replay golden fixtures offline and inspect checks recorded on real demo review actions.'],
-    monitor: ['Monitoring', 'Inspect measured investigation runs and open LangSmith traces when configured.'],
+    monitor: ['Monitoring', 'Track complaints, historical issues, investigation performance, and offline and online evals.'],
   };
 
   return <div className="shell">
@@ -417,10 +423,16 @@ export default function Home() {
             </div>)}
           </Panel></>}
 
-        {screen === 'monitor' && <Panel title="Investigation runs"><div className="actions"><Badge status={health?.tracing ? 'LangSmith tracing configured' : 'Local metrics'} /><button disabled={!!busy} onClick={() => open('monitor')}>Refresh runs</button></div>
+        {screen === 'monitor' && <>
+          <div className="actions monitor-actions">
+            <button className="primary" onClick={() => open('monitor')} disabled={!!busy}>Refresh dashboard</button>
+            <button onClick={() => open('evals')} disabled={!!busy}>Open Evaluation Lab</button>
+          </div>
+          {monitorStats && <MonitoringDashboard stats={monitorStats} />}
+          <Panel title="Recent investigation runs"><div className="actions"><Badge status={health?.tracing ? 'LangSmith tracing configured' : 'Local metrics'} /></div>
           <div className="table-wrap"><table><thead><tr><th>Run / Case</th><th>Status</th><th>Latency</th><th>Tokens</th><th>History / online evals</th><th>Trace</th></tr></thead><tbody>
             {runs.map(run => <tr key={run.id}><td><strong>{run.case_id}</strong><small className="mono">{run.id}</small><small>{new Date(run.created_at).toLocaleString()} · {run.mode || '—'}</small>{run.rerank_mode && <small>Rerank · {run.rerank_mode === 'openai' ? 'OpenAI' : 'Local rules'}</small>}</td><td><Badge status={run.status} /></td><td>{run.duration_ms} ms</td><td>{run.tokens ?? '—'}</td><td>{run.history_ids?.join(', ') || '—'}<small>{run.historical_report_refs?.join(', ')}</small><small>{run.online_eval_count ?? 0} online eval records</small></td><td>{run.trace_url ? <a href={run.trace_url} target="_blank" rel="noreferrer">Open trace ↗</a> : '—'}</td></tr>)}
-          </tbody></table></div>{runs.length === 0 && <p className="empty">Run a case to see its investigation metrics here.</p>}</Panel>}
+          </tbody></table></div>{runs.length === 0 && <p className="empty">Run a case to see its investigation metrics here.</p>}</Panel></>}
       </div>
     </main>
     {sourceView && <dialog open className="drawer" aria-label="Evidence detail"><button autoFocus onClick={() => setSourceView(null)}>Close evidence</button><h2>{sourceView.label}</h2><p className="mono">{sourceView.location}</p><p>{sourceView.text}</p></dialog>}

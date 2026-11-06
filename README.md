@@ -4,7 +4,7 @@
 
 Follow the evidence from a complaint through investigation, human review, and reporting handoff. The cohort demo includes three fictional Demo-P1 pump cases.
 
-[Clinical workspace preview](docs/clinical-overview.jpg) · [Investigation workflow](docs/investigation-workflow.jpg) · [Historical case context](docs/historical-context.jpg)
+[Clinical workspace preview](docs/clinical-overview.jpg) · [Investigation workflow](docs/investigation-workflow.jpg) · [Historical case context](docs/historical-context.jpg) · [Monitoring dashboard](docs/monitoring-dashboard.jpg) · [Evaluation metrics](docs/eval-dashboard.jpg)
 
 ## Run locally
 
@@ -80,3 +80,9 @@ The synthetic closed-case source in `backend/data/historical_cases.json` include
 - Reporting handoff snapshots the historical context in a separate section after a human chooses to prepare a handoff. A historical simulated reference is distinct from the current simulated receipt.
 - **Offline evals** run eight checks per golden fixture, including matched history, expected historical report references, and historical citation isolation. The optional hosted LangSmith dataset uses a new version name.
 - **Online evals** automatically score saved review, disposition, and receipt actions. They check reviewer attribution, resolving citation IDs, matching selected follow-ups, and linking handoffs and receipts to the right decisions. Results are persisted in SQLite and visible in Evaluation Lab. Monitoring shows per-run matches and eval counts. These checks cover workflow integrity. Semantic claim support remains a human rubric.
+
+## Monitoring dashboard
+
+Open **Monitoring** for a snapshot of local activity. It shows complaint counts by scenario and status, quality flags, current reporting handoffs and simulated receipts, fictional closed-case counts by issue, and historical simulated filing references. It also shows all saved investigation runs, failures, median duration, and OpenAI rerank usage. The recent-runs table shows up to 100 entries and includes configured trace links.
+
+**Evaluation health** shows the latest completed local offline suite, its fully passed checks, and the cumulative checks from saved online reviewer actions. Use **Open Evaluation Lab** to run the offline suite. Offline summaries start accumulating with this version. An empty workspace shows unavailable scores until checks have run.
