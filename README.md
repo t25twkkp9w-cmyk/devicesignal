@@ -94,3 +94,5 @@ Open **Monitoring** for a snapshot of local activity. It shows complaint counts 
 3. Run the **Offline evals** suite again. Each result shows the expected and actual first follow-up. Monitoring shows the current golden revision alongside the revision used in the latest replay.
 
 Each approval adds an auditable SQLite revision. The online review alone leaves the golden labels unchanged. Edited complaints and cases with added evidence stay in the online review record and are ineligible to update the original golden fixtures. The updated labels score future replays and leave the live recommendation logic and reporting decisions to their existing workflow.
+
+For the tuned Motor Fault demo, the evidence rules put **Request drive-system diagnostics** first when the current log records `MOTOR_FAULT`. The OpenAI follow-up prompt uses the same priority when configured. Revision 0 preserves the original expectation, **Preserve the diagnostic log**. To reproduce the tuned 9/9 Motor Fault replay from a fresh database, approve **Request drive-system diagnostics** as the golden target and run the local suite against the resulting revision.
