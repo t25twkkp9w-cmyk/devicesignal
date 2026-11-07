@@ -1,8 +1,10 @@
 .git
 **/.env
 **/.env.*
-.venv
-.state
+**/.venv
+**/.state
 **/__pycache__
+**/*.sqlite*
+**/*.db
 web/node_modules
 web/.next

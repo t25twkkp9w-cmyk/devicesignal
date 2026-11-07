@@ -23,6 +23,14 @@ npm run dev -- --hostname 127.0.0.1
 
 Open http://127.0.0.1:3000. FastAPI's interactive API is at http://127.0.0.1:8000/docs. Next.js proxies API requests to FastAPI. Set `DEVICETRAIL_BACKEND_URL` before starting or building the UI if FastAPI runs on a different port. Run one backend process with its own writable state directory.
 
+## Deploy a public demo on Render Free
+
+1. In the [Render dashboard](https://dashboard.render.com/), create a **Web Service** from the GitHub **DeviceTrail** repository and branch **main**.
+2. Select **Docker** and instance type **Free**. Leave Root Directory and Docker Command blank. Use `./Dockerfile` as the Dockerfile path and `/api/health` as the health check path.
+3. Leave model and tracing keys unset to use local ranking and evals. The container defaults to `DEVICETRAIL_STATE_DIR=/tmp/devicetrail`. Deploy, then open the assigned `onrender.com` URL and run the Motor Fault case.
+
+Visitors share the same demo workspace and can save actions. Use fictional data only. Render Free sleeps when idle and discards local SQLite data on sleep, restart, or redeploy. A paid service with a persistent disk can retain state by setting `DEVICETRAIL_STATE_DIR` to the disk mount path.
+
 ## Walk through the demo
 
 1. Load **Low battery** from Overview and start an investigation. Open the event log and manual citations. The 4% charge and BAT-LOW alarm support a possible explanation. The stop reason and battery health remain unconfirmed.
